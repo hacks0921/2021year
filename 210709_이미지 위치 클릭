@@ -1,0 +1,128 @@
+import sys
+import subprocess
+import os
+from datetime import datetime
+import os
+from openpyxl import load_workbook
+import shutil
+import cv2
+import numpy as np
+from datetime import datetime
+
+path = '.\L1'
+image_names = os.listdir(path)
+size = (1280, 1280)
+
+dir_del = None
+clicked_points = []
+clone = None
+
+def on_mouse(event, x, y, flags, param):
+    # event는 마우스 동작 상수값, 클릭, 이동 등등
+    # x, y는 내가 띄운 창을 기준으로 좌측 상단점이 0,0이 됌
+    # flags는 마우스 이벤트가 발생할 때 키보드 또는 마우스 상태를 의미, Shif+마우스 등 설정가능
+    # param은 영상이룻도 있도 전달하고 싶은 데이타, 안쓰더라도 넣어줘야함
+
+    global oldx, oldy # 밖에 있는 oldx, oldy 불러옴
+    add_img = clone.copy()
+    if event == cv2.EVENT_LBUTTONDOWN: # 왼쪽이 눌러지면 실행
+        oldx, oldy = x, y # 마우스가 눌렀을 때 좌표 저장, 띄워진 영상에서의 좌측 상단 기준
+        print('EVENT_LBUTTONDOWN: %d, %d' % (x, y)) # 좌표 출력
+
+    elif event == cv2.EVENT_LBUTTONUP: # 마우스 뗏을때 발생
+        print('EVENT_LBUTTONUP: %d, %d' % (x, y)) # 좌표 출력
+
+    elif event == cv2.EVENT_MOUSEMOVE: # 마우스가 움직일 때 발생
+        if flags & cv2.EVENT_FLAG_LBUTTON: # ==를 쓰면 다른 키도 입력되었을 때 작동안하므로 &(and) 사용
+            cv2.circle(add_img, (x, y), 5, (0, 255, 0), -1) # 단점이 빠르게 움직이면 끊김
+
+            # circle은 끊기므로 line 이용
+            # 마우스 클릭한 좌표에서 시작해서 마우스 좌표까지 그림
+            cv2.line(add_img, (oldx, oldy), (x, y), (0, 0, 255), 4, cv2.LINE_AA)
+            cv2.imshow('image', add_img)
+            oldx, oldy = x, y # 그림을 그리고 또 좌표 저장
+
+
+def MouseLeftClick(event, x, y, flags, param):
+	# 왼쪽 마우스가 클릭되면 (x, y) 좌표를 저장한다.
+    if event == cv2.EVENT_LBUTTONDOWN:
+        clicked_points.append((y, x))
+        print(clicked_points[-1])
+		# 원본 파일을 가져 와서 clicked_points에 있는 점들을 그린다.
+        image = clone.copy()
+        for point in clicked_points:
+            cv2.circle(image, (point[1], point[0]), 5, (0, 255, 255), thickness = -5)
+        cv2.imshow("image", image)
+
+
+def main():
+
+    global clone, clicked_points
+    now = datetime.now()
+    print(now)
+    now_str = "%s%02d%02d_%02d%02d%02d" % (now.year - 2000, now.month, now.day, now.hour, now.minute, now.second)
+    # 210706_153714 년월일_시분초
+    print(now_str)
+
+    # 마우스 클릭 시 chlicked points 리스트 저장...
+    cv2.namedWindow("image")
+    # cv2.setMouseCallback("image", MouseLeftClick)
+    cv2.setMouseCallback("image", on_mouse)
+
+    for idx1, image_name1 in enumerate(image_names):
+        x1 = image_name1.split("_")[7]
+        y1 = image_name1.split("_")[8]
+        ccd1 = image_name1[-7:]
+        if ccd1 == "CCD.jpg":
+            for idx2, image_name2 in enumerate(image_names):
+                x2 = image_name2.split("_")[7]
+                y2 = image_name2.split("_")[8]
+                ccd2 = image_name2[-7:]
+                if x1==x1 and y1==y2 and ccd2 == "1_1.jpg":
+                    print(image_name2)
+                    print(image_name1)
+                    image_name1_path = os.path.join(path,image_name1)
+                    image_name2_path = os.path.join(path, image_name2)
+                    leftimg = cv2.imread(image_name1_path)
+                    rightimg = cv2.imread(image_name2_path)
+                    leftimg_resize = cv2.resize(leftimg, dsize=(800,800), interpolation=cv2.INTER_AREA)
+                    rightimg_resize = cv2.resize(rightimg, dsize=(800,800), interpolation=cv2.INTER_AREA)
+                    add_img = np.hstack((leftimg_resize, rightimg_resize))
+
+                    clone = add_img.copy()
+
+                    flag = False
+
+                    while True:
+                        cv2.imshow("image", add_img)
+                        key = cv2.waitKey(0)
+
+                        if key == ord('n'):  #next 버튼 눌렀을떄
+
+                            file_write = open('./' + now_str + '_' + path[-2:] + '.txt', 'a+')
+                            text_output = image_name1
+                            text_output += "," + str(len(clicked_points))
+                            for points in clicked_points:
+                                text_output += "," + str(points[0]) + "," + str(points[1])
+                            text_output += '\n'
+                            file_write.write(text_output) # 텍스트 파일로 저장
+                            clicked_points = []
+                            break
+                        if key == ord('b'):
+                            break
+                        if key == ord('q'):
+                            flag = True
+                            break
+        if flag:
+            break
+
+    print("완료")
+                    # cv2.imshow('add_img', add_img)
+                    # cv2.waitKey(0)
+                    # cv2.namedWindow('image')
+                    # cv2.waitKey(0)
+                    # cv2.setMouseCallback('image', on_mouse, add_img)
+
+
+if __name__ == "__main__":
+    main()
